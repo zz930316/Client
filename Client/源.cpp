@@ -1,4 +1,4 @@
-// TcpClient.cpp : �������̨Ӧ�ó������ڵ㡣  
+// TcpClient.cpp : 定义控制台应用程序的入口点。  
  
 
 #include <winsock2.h>  
@@ -12,9 +12,9 @@ using namespace std;
 
 
 /*
-				����cmd  ��
-netstat -nao        :			�鿴����Щ�˿��ڱ�ʹ��;
-netstat -nao | findstr 63790  :  ����63790����˿�;
+				运行cmd  ：
+netstat -nao        :			查看有哪些端口在被使用;
+netstat -nao | findstr 63790  :  查找63790这个端口;
 */
 
 
@@ -25,105 +25,106 @@ int main()
 	SOCKADDR_IN servAddr;
 	char buf[BUF_SIZE];
 	int retVal;
-	//��ʼ��Socket  
-	if (WSAStartup(MAKEWORD(2, 2), &wsd) != 0)//WSAStartup�Ĺ����ǳ�ʼ��Winsock DLL��
+	//初始化Socket  
+	//MAKEWORD(1, 1)和MAKEWORD(2, 2)的区别在于，前者只能一次接收一次，不能马上发送，而后者能
+	if (WSAStartup(MAKEWORD(2, 2), &wsd) != 0)//WSAStartup的功能是初始化Winsock DLL，
 	{
 		cout << "WSAStartup failed!" << endl;
 		return -1;
 	}
-	//�������ڼ�����Socket  
+	//创建用于监听的Socket  
 	sHost = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (INVALID_SOCKET == sHost)//INVALID_SOCKET ����Ч�׽���
+	if (INVALID_SOCKET == sHost)//INVALID_SOCKET 是无效套接字
 	{
 		cout << "socket failed!" << endl;
-		WSACleanup();/*WSACleanup���������Socket��İ󶨲����ͷ�Socket����ռ�õ�ϵͳ��Դ��*/
+		WSACleanup();/*WSACleanup是来解除与Socket库的绑定并且释放Socket库所占用的系统资源。*/
 		return -1;
 	}
-	//����SocketΪ������ģʽ  
+	//设置Socket为非阻塞模式  
 	int iMode = 1;
 	/*int ioctlsocket( SOCKET s, long cmd, u_long FAR *argp );
-	s��һ����ʶ�׽ӿڵ�������;		cmd�����׽ӿ�s�Ĳ�������;		argp��ָ��cmd��������������ָ��;*/
-	retVal = ioctlsocket(sHost, FIONBIO, (u_long FAR*)&iMode);//FIONBIO����socket����Ϊ������
-																//u_long �޷��ų����� 4���ֽ�
-	//��ioctlsocket�����ɹ���ioctlsocket()����0������Ļ�������SOCKET_ERROR����
-	if (retVal == SOCKET_ERROR)		//SOCKET_ERROR 0 �ӿڴ���
+	s：一个标识套接口的描述字;		cmd：对套接口s的操作命令;		argp：指向cmd命令所带参数的指针;*/
+	retVal = ioctlsocket(sHost, FIONBIO, (u_long FAR*)&iMode);//FIONBIO：将socket设置为非阻塞
+																//u_long 无符号长整型 4个字节
+	//当ioctlsocket函数成功后，ioctlsocket()返回0。否则的话，返回SOCKET_ERROR错误，
+	if (retVal == SOCKET_ERROR)		//SOCKET_ERROR 0 接口错误
 	{
 		cout << "ioctlsocket failed!" << endl;
-		WSACleanup();/*WSACleanup���������Socket��İ󶨲����ͷ�Socket����ռ�õ�ϵͳ��Դ��*/
+		WSACleanup();/*WSACleanup是来解除与Socket库的绑定并且释放Socket库所占用的系统资源。*/
 		return -1;
 	}
-	//���÷�����Socket��ַ  
+	//设置服务器Socket地址  
 	servAddr.sin_family = AF_INET;
-	servAddr.sin_port = htons(63790);/*htons�����������˿�ת��Ϊ�����ֽ�˳��(to network short);
-							htons ���޷��Ŷ�����ת��Ϊ�����ֽ�˳��;*/
+	servAddr.sin_port = htons(63790);/*htons用来将主机端口转换为网络字节顺序(to network short);
+							htons 将无符号短整型转换为网络字节顺序;*/
 	servAddr.sin_addr.S_un.S_addr = htonl(INADDR_LOOPBACK);//inet_addr("127.0.0.1");//htonl(INADDR_ANY); 255.255.255.255 => ffffffff, 127.0.0.1 => 7f000001
-				/*���أ����ַ�����Ч���ַ���ת��Ϊ32λ�����������ֽ����IPV4��ַ������ΪINADDR_NONE
-							htonl������������ַת��Ϊ�����ֽ�˳��(to network long);
-								 htonl ���޷��ų�����ת��Ϊ�����ֽ�˳��;
-							 INADDR_ANY����ָ����ַΪ0.0.0.0�ĵ�ַ,��ʾ��ȷ����ַ,�������ַ������  */
+				/*返回：若字符串有效则将字符串转换为32位二进制网络字节序的IPV4地址，否则为INADDR_NONE
+							htonl用来将主机地址转换为网络字节顺序(to network long);
+								 htonl 将无符号长整形转换为网络字节顺序;
+							 INADDR_ANY就是指定地址为0.0.0.0的地址,表示不确定地址,或“任意地址”。”  */
 
 	int sServerAddlen = sizeof(servAddr);
 
-	//���ӵ�������  
+	//连接到服务器  
 	while (true)
 	{
-		/*����ԭ��: int connect(int s, const struct sockaddr * name, int namelen);
-				s����ʶһ��δ����socket;
-				name��ָ��Ҫ�����׽��ֵ�sockaddr�ṹ���ָ��;
-				namelen��sockaddr�ṹ����ֽڳ���;
-				�ɹ��򷵻�0, ʧ�ܷ���-1, */
-		// �ͻ����������������������  �ú����Ĺ���Ϊ�ͻ����������ӷ�����;
+		/*函数原型: int connect(int s, const struct sockaddr * name, int namelen);
+				s：标识一个未连接socket;
+				name：指向要连接套接字的sockaddr结构体的指针;
+				namelen：sockaddr结构体的字节长度;
+				成功则返回0, 失败返回-1, */
+		// 客户机向服务器发出连接请求  该函数的功能为客户端主动连接服务器;
 		retVal = connect(sHost, (LPSOCKADDR)&servAddr, sizeof(servAddr));
-		if (SOCKET_ERROR == retVal)//SOCKET_ERROR 0 �ӿڴ���
+		if (SOCKET_ERROR == retVal)//SOCKET_ERROR 0 接口错误
 		{
-			int err = WSAGetLastError(); //ָ�ú��������ϴη������������,��������кܶ��ַ���ֵ ���ٶ�...
+			int err = WSAGetLastError(); //指该函数返回上次发生的网络错误,这个函数有很多种返回值 ，百度...
 			
-			//WSAEWOULDBLOCK : 10035 ��Դ��ʱ������ ;  WSAEINVAL  10022 - ������Ч
+			//WSAEWOULDBLOCK : 10035 资源暂时不可用 ;  WSAEINVAL  10022 - 参数无效
 			if (err == WSAEWOULDBLOCK || err == WSAEINVAL)
 			{
 				Sleep(500);
 				continue;
 			}
-			else if (err == WSAEISCONN)//WSAEISCONN    10056 - �׽����Ѿ�����
+			else if (err == WSAEISCONN)//WSAEISCONN    10056 - 套接字已经连接
 				break;
 			else
 			{
 				cout << "connection failed!" << endl;
-				closesocket(sHost);	//�ر������ӵ�sHost����������IP���˿ڵ�����
-				WSACleanup();/*WSACleanup���������Socket��İ󶨲����ͷ�Socket����ռ�õ�ϵͳ��Դ��*/
+				closesocket(sHost);	//关闭与连接的sHost（服务器）IP，端口的连接
+				WSACleanup();/*WSACleanup是来解除与Socket库的绑定并且释放Socket库所占用的系统资源。*/
 				return -1;
 			}
 		}
 	}
 
-	//�շ�����  
+	//收发数据  
 	while (true)
 	{
-		cout << "������һ���ַ�������:";
+		cout << "请输入一个字符串发送:";
 		string str;
-		getline(cin, str);//��ȡ������ַ���
+		getline(cin, str);//获取输入的字符串
 
 		/*void ZeroMemory( PVOID Destination,SIZE_T Length );
-			  Destination :ָ��һ��׼����0�������ڴ�����Ŀ�ʼ��ַ��
-	    	  Length :׼����0�������ڴ�����Ĵ�С�����ֽ������㡣
-			  ZeroMemoryֻ�ǽ�ָ�����ڴ�����㡣ʹ�ýṹǰ���㣬�����ýṹ�ĳ�Ա��ֵ���в�ȷ���ԣ�
-		���ǽ�buf�����е�64��Ԫ��ȫ����ֵΪ0*/
+			  Destination :指向一块准备用0来填充的内存区域的开始地址。
+	    	  Length :准备用0来填充的内存区域的大小，按字节来计算。
+			  ZeroMemory只是将指定的内存块清零。使用结构前清零，而不让结构的成员数值具有不确定性，
+		就是讲buf数组中的64个元素全部赋值为0*/
 		ZeroMemory(buf, BUF_SIZE);
-		strcpy_s(buf, str.c_str());//c_str���ص�ǰ�ַ��������ַ���ַ������Ҫ��һ�����û��Լ������ļ������ļ�ʱ����������д��ifstream in(st.c_str())��
+		strcpy_s(buf, str.c_str());//c_str返回当前字符串的首字符地址。当需要打开一个由用户自己输入文件名的文件时，可以这样写：ifstream in(st.c_str())。
 		while (true)
 		{
-			/*�������ݶ�:	sockfd :  ָ�����Ͷ��׽���������;
-			buff   :  ���Ҫ�������ݵĻ�����;
-			nbytes :  ʵ��Ҫ���Ƶ����ݵ��ֽ���;
-			flags  :  һ����Ϊ0;
+			/*发送数据端:	sockfd :  指定发送端套接字描述符;
+			buff   :  存放要发送数据的缓冲区;
+			nbytes :  实际要改善的数据的字节数;
+			flags  :  一般置为0;
 			send(int sockfd, const void *buff, size_t nbytes, int flags);
-			���޴�������send()�������������ݵ���������ע��������ֿ���С��len�����涨�Ĵ�С����
-			����Ļ�������//SOCKET_ERROR 0 �ӿڴ���Ӧ�ó����ͨ��WSAGetLastError()��ȡ��Ӧ������롣*/
+			若无错误发生，send()返回所发送数据的总数（请注意这个数字可能小于len中所规定的大小）。
+			否则的话，返回//SOCKET_ERROR 0 接口错误，应用程序可通过WSAGetLastError()获取相应错误代码。*/
 			retVal = send(sHost, buf, strlen(buf), 0);
-			if (SOCKET_ERROR == retVal)//SOCKET_ERROR 0 �ӿڴ���
+			if (SOCKET_ERROR == retVal)//SOCKET_ERROR 0 接口错误
 			{
-				int err = WSAGetLastError();//ָ�ú��������ϴη������������,��������кܶ��ַ���ֵ ���ٶ�...
-				if (err == WSAEWOULDBLOCK)//WSAEWOULDBLOCK : 10035 ��Դ��ʱ������ ;
+				int err = WSAGetLastError();//指该函数返回上次发生的网络错误,这个函数有很多种返回值 ，百度...
+				if (err == WSAEWOULDBLOCK)//WSAEWOULDBLOCK : 10035 资源暂时不可用 ;
 				{
 					Sleep(500);
 					continue;
@@ -131,8 +132,8 @@ int main()
 				else
 				{
 					cout << "send failed!" << endl;
-					closesocket(sHost);//�ر������ӵ�sHost����������IP���˿ڵ�����
-					WSACleanup();/*WSACleanup���������Socket��İ󶨲����ͷ�Socket����ռ�õ�ϵͳ��Դ��*/
+					closesocket(sHost);//关闭与连接的sHost（服务器）IP，端口的连接
+					WSACleanup();/*WSACleanup是来解除与Socket库的绑定并且释放Socket库所占用的系统资源。*/
 				}
 			}
 			break;
@@ -141,28 +142,28 @@ int main()
 
 		while (true)
 		{
-			ZeroMemory(buf, BUF_SIZE);//����
-			/*���ն˷�����������:
-			sockfd  :  ���ն��׽���������;
-			buff    :  �������recv�������յ������ݵĻ�����;
-			nbytes  :  ָ��buff�ĳ���;
-			flags   :  һ����Ϊ0;
+			ZeroMemory(buf, BUF_SIZE);//清零
+			/*接收端发送来的数据:
+			sockfd  :  接收端套接字描述符;
+			buff    :  用来存放recv函数接收到的数据的缓冲区;
+			nbytes  :  指明buff的长度;
+			flags   :  一般置为0;
 			recv(int sockfd, void *buff, size_t nbytes, int flags);*/
 			retVal = recv(sHost, buf, sizeof(buf) + 1, 0);
 			if (SOCKET_ERROR == retVal)
 			{
-				int err = WSAGetLastError();//ָ�ú��������ϴη������������,��������кܶ��ַ���ֵ ���ٶ�...
-				if (err == WSAEWOULDBLOCK)//WSAEWOULDBLOCK : 10035 ��Դ��ʱ������
+				int err = WSAGetLastError();//指该函数返回上次发生的网络错误,这个函数有很多种返回值 ，百度...
+				if (err == WSAEWOULDBLOCK)//WSAEWOULDBLOCK : 10035 资源暂时不可用
 				{
 					Sleep(100);
-					printf("�ȴ��ظ���\n");
+					printf("等待回复！\n");
 					continue;
 				}
 				else if (err == WSAETIMEDOUT || err == WSAENETDOWN)
 				{
 					printf("recv failed!\n");
-					closesocket(sHost);//�ر������ӵ�sHost����������IP���˿ڵ�����
-					WSACleanup();/*WSACleanup���������Socket��İ󶨲����ͷ�Socket����ռ�õ�ϵͳ��Դ��*/
+					closesocket(sHost);//关闭与连接的sHost（服务器）IP，端口的连接
+					WSACleanup();/*WSACleanup是来解除与Socket库的绑定并且释放Socket库所占用的系统资源。*/
 					return -1;
 				}
 				break;
@@ -170,7 +171,7 @@ int main()
 			break;
 
 		}
-		printf("Recv�ӷ�������%s\n", buf);
+		printf("Recv从服务器：%s\n", buf);
 		if (strcmp(buf, "quit") == 0)
 		{
 			printf("quit!\n");
@@ -178,8 +179,8 @@ int main()
 		}
 	}
 
-	closesocket(sHost);//�ر������ӵ�sHost����������IP���˿ڵ�����
-	WSACleanup();/*WSACleanup���������Socket��İ󶨲����ͷ�Socket����ռ�õ�ϵͳ��Դ��*/
+	closesocket(sHost);//关闭与连接的sHost（服务器）IP，端口的连接
+	WSACleanup();/*WSACleanup是来解除与Socket库的绑定并且释放Socket库所占用的系统资源。*/
 	system("pause");
 
 	return 0;
